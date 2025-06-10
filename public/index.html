@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🤖 AI Job Agent</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container py-4">
+    <h3 class="text-center mb-3">🤖 AI Job Agent</h3>
+    <div id="chat-box" class="border p-3 rounded bg-light mb-3 chat-box"></div>
+
+    <form id="job-form">
+      <div class="mb-2">
+        <input type="text" class="form-control" id="roles" placeholder="Enter roles (e.g., Civil Engineer, Software Dev)">
+      </div>
+      <div class="mb-2">
+        <input type="text" class="form-control" id="locations" placeholder="Preferred locations (e.g., Pune, Remote)">
+      </div>
+      <div class="mb-2">
+        <input type="text" class="form-control" id="experience" placeholder="Experience (e.g., Fresher, 3 years)">
+      </div>
+      <div class="mb-2">
+        <input type="text" class="form-control" id="skills" placeholder="Skills (e.g., Autocad, React, Architecture)">
+      </div>
+      <div class="mb-3">
+        <input type="file" id="resume" class="form-control" />
+      </div>
+      <button type="submit" class="btn btn-primary w-100">Search Jobs</button>
+    </form>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

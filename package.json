@@ -1,0 +1,22 @@
+{
+  "name": "job-scraper",
+  "version": "1.0.0",
+  "description": "AI Job Agent - Node.js + HTML Frontend",
+  "main": "scraper_server.js",
+  "scripts": {
+    "start": "node scraper_server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "linkedin-jobs-api": "^1.0.6",
+    "multer": "^2.0.1",
+    "pdf-parse": "^1.1.1",
+    "puppeteer": "^24.10.0"
+  }
+}
