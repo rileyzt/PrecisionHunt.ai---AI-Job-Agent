@@ -78,7 +78,7 @@ export default function JobForm() {
     setLastFormData(formData); // Store last submitted form
 
     try {
-      const res = await fetch(`https://precisionhunt‑ai‑ysut.onrender.com/search?page=1`, {
+      const res = await fetch(`https://precisionhunt-ai-ysut.onrender.com/search?page=1`, {
         method: "POST",
         body: formDataObj,
       });
@@ -136,7 +136,7 @@ export default function JobForm() {
     if (lastFormData.resume) formDataObj.append("resume", lastFormData.resume);
 
     try {
-      const res = await fetch(`https://precisionhunt‑ai‑ysut.onrender.com/search?page=${nextPage}`, {
+      const res = await fetch(`https://precisionhunt-ai-ysut.onrender.com/search?page=${nextPage}`, {
         method: "POST",
         body: formDataObj,
       });
@@ -184,7 +184,7 @@ export default function JobForm() {
     if (lastFormData.resume) formDataObj.append("resume", lastFormData.resume);
 
     try {
-      const res = await fetch(`https://precisionhunt‑ai‑ysut.onrender.com/search?page=${prevPage}`, {
+      const res = await fetch(`https://precisionhunt-ai-ysut.onrender.com/search?page=${prevPage}`, {
         method: "POST",
         body: formDataObj,
       });
