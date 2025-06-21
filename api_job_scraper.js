@@ -14,11 +14,11 @@ class APIJobScraper {
             }
         };
         this.jobResults = [];
+        this.processedJobs = new Set(); // Track processed jobs to avoid duplicates
         
         // API Keys and configurations
         this.apiKeys = {
-            rapidApi: '35116360bamshb9faa3e70a2ef47p1340ecjsnb1c1733d804f',
-            // Add more API keys as needed
+            rapidApi: process.env.RAPID_API_KEY,
         };
     }
 
@@ -32,7 +32,7 @@ class APIJobScraper {
         console.log('👤 User profile set');
     }
 
-    // RemoteOK API (Most reliable)
+    // RemoteOK API (Most reliable) - Fixed location filtering
     async fetchRemoteOKJobs(role, limit = 10) {
         console.log('🌐 Fetching from RemoteOK API...');
         const jobs = [];
@@ -53,7 +53,7 @@ class APIJobScraper {
             // Skip the first item (metadata)
             const jobData = data.slice(1);
             
-            // Better filtering
+            // Improved filtering - broader search terms
             const filteredJobs = jobData
                 .filter(job => {
                     if (!job || !job.position) return false;
@@ -64,26 +64,37 @@ class APIJobScraper {
                     const searchText = `${position} ${description} ${tags}`;
                     const roleKeywords = role.toLowerCase().split(' ');
                     
-                    return roleKeywords.some(keyword => searchText.includes(keyword));
+                    // More flexible matching
+                    return roleKeywords.some(keyword => 
+                        searchText.includes(keyword) || 
+                        position.includes(keyword) ||
+                        tags.includes(keyword)
+                    );
                 })
                 .slice(0, limit);
 
             console.log(`📋 Found ${filteredJobs.length} matching jobs from RemoteOK`);
 
             for (const job of filteredJobs) {
-                jobs.push({
-                    title: job.position,
-                    company: job.company,
-                    location: job.location || 'Remote',
-                    salary: this.formatSalary(job.salary_min, job.salary_max),
-                    link: `https://remoteok.io/remote-jobs/${job.slug || job.id}`,
-                    description: job.description || job.tags?.join(', ') || 'Visit link for details',
-                    tags: job.tags || [],
-                    source: 'RemoteOK',
-                    matchScore: 0,
-                    postedDate: job.date || new Date().toISOString(),
-                    featured: job.featured || false
-                });
+                const jobId = `remoteok_${job.id || job.slug}`;
+                if (!this.processedJobs.has(jobId)) {
+                    this.processedJobs.add(jobId);
+                    jobs.push({
+                        id: jobId,
+                        title: job.position,
+                        company: job.company,
+                        location: job.location || 'Remote',
+                        salary: this.formatSalary(job.salary_min, job.salary_max),
+                        link: `https://remoteok.io/remote-jobs/${job.slug || job.id}`,
+                        description: job.description || job.tags?.join(', ') || 'Visit link for details',
+                        tags: job.tags || [],
+                        source: 'RemoteOK',
+                        matchScore: 0,
+                        postedDate: job.date || new Date().toISOString(),
+                        featured: job.featured || false,
+                        isRemote: true
+                    });
+                }
             }
 
             console.log(`✅ Successfully fetched ${jobs.length} jobs from RemoteOK`);
@@ -94,10 +105,9 @@ class APIJobScraper {
         return jobs;
     }
 
-    // LinkedIn Jobs API via RapidAPI
-   // LinkedIn Jobs API via RapidAPI
-    async fetchLinkedInJobs(role, location = 'Worldwide', limit = 10) {
-        console.log('🔗 Fetching from LinkedIn API.');
+    // LinkedIn Jobs API via RapidAPI - Fixed location handling
+    async fetchLinkedInJobs(role, location, limit = 10) {
+        console.log(`🔗 Fetching from LinkedIn API for ${role} in ${location}...`);
         const jobs = [];
 
         try {
@@ -127,41 +137,41 @@ class APIJobScraper {
                 linkedinJobs = data.jobs.slice(0, limit);
             } else {
                 console.log('⚠️ LinkedIn API returned no jobs or unknown format');
-                console.log('Response:', JSON.stringify(data, null, 2));
                 return jobs;
             }
 
             for (const job of linkedinJobs) {
-                jobs.push({
-                    title: job.title || job.job_title || 'Job Title Not Available',
-                    company: job.company || job.company_name || 'Company Not Available',
-                    location: job.location || location,
-                    salary: job.salary || 'Not specified',
-                    link: job.job_url || job.url || 'https://linkedin.com/jobs',
-                    description: job.description || job.snippet || 'LinkedIn job posting',
-                    source: 'LinkedIn',
-                    matchScore: 0,
-                    postedDate: job.posted_date || job.date || new Date().toISOString(),
-                    jobType: job.job_type || 'Not specified'
-                });
+                const jobId = `linkedin_${job.id || job.job_id || Math.random().toString(36)}`;
+                if (!this.processedJobs.has(jobId)) {
+                    this.processedJobs.add(jobId);
+                    jobs.push({
+                        id: jobId,
+                        title: job.title || job.job_title || 'Job Title Not Available',
+                        company: job.company || job.company_name || 'Company Not Available',
+                        location: job.location || location,
+                        salary: job.salary || 'Not specified',
+                        link: job.job_url || job.url || 'https://linkedin.com/jobs',
+                        description: job.description || job.snippet || 'LinkedIn job posting',
+                        source: 'LinkedIn',
+                        matchScore: 0,
+                        postedDate: job.posted_date || job.date || new Date().toISOString(),
+                        jobType: job.job_type || 'Not specified',
+                        isRemote: this.isRemoteJob(job.location || location)
+                    });
+                }
             }
 
             console.log(`✅ Successfully fetched ${jobs.length} jobs from LinkedIn API`);
         } catch (error) {
             console.error('❌ Error fetching LinkedIn jobs:', error.message);
-            if (error.response) {
-                console.error('Response status:', error.response.status);
-                console.error('Response data:', error.response.data);
-            }
         }
 
         return jobs;
     }
 
-
-    // JSearch API via RapidAPI (Indeed, LinkedIn, Glassdoor, etc.)
-    async fetchJSearchJobs(role, location = 'Remote', limit = 10) {
-        console.log('🔍 Fetching from JSearch API (Indeed, Glassdoor, etc.)...');
+    // JSearch API via RapidAPI - Enhanced for multiple job types
+    async fetchJSearchJobs(role, location, limit = 10) {
+        console.log(`🔍 Fetching from JSearch API for ${role} in ${location}...`);
         const jobs = [];
         
         try {
@@ -172,7 +182,8 @@ class APIJobScraper {
                     query: `${role} ${location}`,
                     page: '1',
                     num_pages: '1',
-                    date_posted: 'week'
+                    date_posted: 'month', // Extended to month for more results
+                    employment_types: 'FULLTIME,PARTTIME,CONTRACTOR'
                 },
                 headers: {
                     'x-rapidapi-key': this.apiKeys.rapidApi,
@@ -187,21 +198,26 @@ class APIJobScraper {
                 const searchJobs = data.data.slice(0, limit);
                 
                 for (const job of searchJobs) {
-                    jobs.push({
-                        title: job.job_title || 'Job Title Not Available',
-                        company: job.employer_name || 'Company Not Available',
-                        location: job.job_city && job.job_state ? 
-                                 `${job.job_city}, ${job.job_state}` : 
-                                 job.job_country || location,
-                        salary: this.formatJSearchSalary(job),
-                        link: job.job_apply_link || job.job_offer_expiration_datetime_utc || '#',
-                        description: job.job_description || job.job_highlights?.Responsibilities?.[0] || 'Job description not available',
-                        source: job.job_publisher || 'JSearch',
-                        matchScore: 0,
-                        postedDate: job.job_posted_at_datetime_utc || new Date().toISOString(),
-                        jobType: job.job_employment_type || 'Not specified',
-                        isRemote: job.job_is_remote || false
-                    });
+                    const jobId = `jsearch_${job.job_id || Math.random().toString(36)}`;
+                    if (!this.processedJobs.has(jobId)) {
+                        this.processedJobs.add(jobId);
+                        jobs.push({
+                            id: jobId,
+                            title: job.job_title || 'Job Title Not Available',
+                            company: job.employer_name || 'Company Not Available',
+                            location: job.job_city && job.job_state ? 
+                                     `${job.job_city}, ${job.job_state}` : 
+                                     job.job_country || location,
+                            salary: this.formatJSearchSalary(job),
+                            link: job.job_apply_link || job.job_offer_expiration_datetime_utc || '#',
+                            description: job.job_description || job.job_highlights?.Responsibilities?.[0] || 'Job description not available',
+                            source: job.job_publisher || 'JSearch',
+                            matchScore: 0,
+                            postedDate: job.job_posted_at_datetime_utc || new Date().toISOString(),
+                            jobType: job.job_employment_type || 'Not specified',
+                            isRemote: job.job_is_remote || this.isRemoteJob(job.job_city)
+                        });
+                    }
                 }
                 
                 console.log(`✅ Successfully fetched ${jobs.length} jobs from JSearch API`);
@@ -210,26 +226,42 @@ class APIJobScraper {
             }
         } catch (error) {
             console.error('❌ Error fetching JSearch jobs:', error.message);
-            if (error.response) {
-                console.error('Response status:', error.response.status);
-                console.error('Response data:', error.response.data);
-            }
         }
 
         return jobs;
     }
 
-    // Adzuna API (Free API for job search)
-    async fetchAdzunaJobs(role, location = 'remote', limit = 10) {
-        console.log('📊 Fetching from Adzuna API...');
+    // Adzuna API - Enhanced with better location handling
+    async fetchAdzunaJobs(role, location, limit = 10) {
+        console.log(`📊 Fetching from Adzuna API for ${role} in ${location}...`);
         const jobs = [];
         
         try {
-            // You need to register for free at https://developer.adzuna.com/
-            const appId = 'ca69d0f7'; // Replace with your Adzuna App ID
-            const appKey = '333414418474ec6637c5c2848c3c70dc'; // Replace with your Adzuna App Key
+            const appId = 'ca69d0f7';
+            const appKey = '333414418474ec6637c5c2848c3c70dc';
             
-            const url = `https://api.adzuna.com/v1/api/jobs/us/search/1`;
+            // Map locations to countries for Adzuna API
+            const countryMap = {
+                'kolkata': 'in',
+                'bangalore': 'in',
+                'mumbai': 'in',
+                'delhi': 'in',
+                'hyderabad': 'in',
+                'pune': 'in',
+                'india': 'in',
+                'dubai': 'ae',
+                'uae': 'ae',
+                'singapore': 'sg',
+                'london': 'gb',
+                'uk': 'gb',
+                'toronto': 'ca',
+                'canada': 'ca',
+                'default': 'us'
+            };
+
+            const country = countryMap[location.toLowerCase()] || countryMap['default'];
+            const url = `https://api.adzuna.com/v1/api/jobs/${country}/search/1`;
+            
             const params = {
                 app_id: appId,
                 app_key: appKey,
@@ -239,31 +271,31 @@ class APIJobScraper {
                 sort_by: 'date'
             };
 
-            // Skip Adzuna if no API keys provided
-            /*if (appId === 'ca69d0f7') {
-                console.log('⚠️ Adzuna API keys not configured, skipping...');
-                return jobs;
-            }*/
-
             const response = await axios.get(url, { params });
             const data = response.data;
 
             if (data && data.results && Array.isArray(data.results)) {
                 for (const job of data.results) {
-                    jobs.push({
-                        title: job.title || 'Job Title Not Available',
-                        company: job.company?.display_name || 'Company Not Available',
-                        location: job.location?.display_name || location,
-                        salary: job.salary_min && job.salary_max ? 
-                               `$${Math.round(job.salary_min)} - $${Math.round(job.salary_max)}` : 
-                               'Not specified',
-                        link: job.redirect_url || '#',
-                        description: job.description || 'Job description not available',
-                        source: 'Adzuna',
-                        matchScore: 0,
-                        postedDate: job.created || new Date().toISOString(),
-                        category: job.category?.label || 'Not specified'
-                    });
+                    const jobId = `adzuna_${job.id || Math.random().toString(36)}`;
+                    if (!this.processedJobs.has(jobId)) {
+                        this.processedJobs.add(jobId);
+                        jobs.push({
+                            id: jobId,
+                            title: job.title || 'Job Title Not Available',
+                            company: job.company?.display_name || 'Company Not Available',
+                            location: job.location?.display_name || location,
+                            salary: job.salary_min && job.salary_max ? 
+                                   `$${Math.round(job.salary_min)} - $${Math.round(job.salary_max)}` : 
+                                   'Not specified',
+                            link: job.redirect_url || '#',
+                            description: job.description || 'Job description not available',
+                            source: 'Adzuna',
+                            matchScore: 0,
+                            postedDate: job.created || new Date().toISOString(),
+                            category: job.category?.label || 'Not specified',
+                            isRemote: this.isRemoteJob(job.location?.display_name || location)
+                        });
+                    }
                 }
                 
                 console.log(`✅ Successfully fetched ${jobs.length} jobs from Adzuna API`);
@@ -273,6 +305,30 @@ class APIJobScraper {
         }
 
         return jobs;
+    }
+
+    // Helper function to determine if job is remote
+    isRemoteJob(location) {
+        if (!location) return false;
+        const loc = location.toLowerCase();
+        return loc.includes('remote') || loc.includes('work from home') || loc.includes('anywhere');
+    }
+
+    // Fixed location matching logic
+    isLocationMatch(jobLocation = '', userLocations = [], allowRemote = false) {
+        const jobLoc = jobLocation.toLowerCase();
+        const userLocs = userLocations.map(loc => loc.toLowerCase());
+        
+        // Check if job is remote and user wants remote
+        if (this.isRemoteJob(jobLocation) && (allowRemote || userLocs.includes('remote'))) {
+            return true;
+        }
+        
+        // Check if job location matches user preferred locations
+        return userLocs.some(userLoc => {
+            if (userLoc === 'remote') return false; // Already handled above
+            return jobLoc.includes(userLoc) || userLoc.includes(jobLoc);
+        });
     }
 
     formatSalary(min, max) {
@@ -318,129 +374,116 @@ class APIJobScraper {
         }
 
         // Location preference (10% weight)
-        if (job.location.toLowerCase().includes('remote') || job.isRemote) {
+        const preferredLocations = this.userProfile.preferences.locations;
+        if (this.isLocationMatch(job.location, preferredLocations, preferredLocations.includes('remote'))) {
             score += 10;
         }
 
         // Recency bonus (5% weight)
         const postedDate = new Date(job.postedDate);
         const daysSincePosted = (new Date() - postedDate) / (1000 * 60 * 60 * 24);
-        if (daysSincePosted <= 7) score += 5; // Recent jobs get bonus
+        if (daysSincePosted <= 7) score += 5;
 
         return Math.round(score);
     }
 
-    async searchAllJobs() {
-    const { roles, locations } = this.userProfile.preferences;
-    console.log('🧠 DEBUG >> this.userProfile.preferences.roles:', roles);
-    console.log('🧠 DEBUG >> this.userProfile.preferences.locations:', locations);
-    const allJobs = [];
+    // Completely rewritten search function with better logic
+    async searchAllJobs(offset = 0) {
+        const { roles, locations } = this.userProfile.preferences;
+        console.log('🧠 Starting job search with offset:', offset);
+        console.log('🎯 Roles:', roles);
+        console.log('📍 Locations:', locations);
+        
+        const allJobs = [];
+        const allowRemote = locations.some(loc => loc.toLowerCase().includes('remote'));
 
-    const userLocations = locations.map(loc => loc.toLowerCase());
+        console.log('🚀 Starting comprehensive API-based job search...');
 
-    const allowRemote = userLocations.includes('remote');
+        for (const role of roles) {
+            console.log(`\n🔍 Searching for: ${role}`);
 
-    const isLocationMatch = (jobLocation = '', isRemote = false) => {
-    const loc = jobLocation.toLowerCase();
-    if (allowRemote && isRemote) return true; // Allow remote jobs only if user requested
-    return userLocations.some(userLoc =>
-        loc.includes(userLoc) || userLoc.includes(loc)
-    );
-    };
+            try {
+                // For each location, search specifically
+                for (const location of locations) {
+                    console.log(`📍 Searching in: ${location}`);
+                    
+                    // Skip remote from location-specific searches
+                    if (location.toLowerCase().includes('remote')) continue;
 
+                    // LinkedIn API for specific location
+                    const linkedinJobs = await this.fetchLinkedInJobs(role, location, 5);
+                    allJobs.push(...linkedinJobs);
+                    await this.sleep(1500);
 
-    console.log('🚀 Starting comprehensive API-based job search...');
-    console.log(`🎯 Searching for roles: ${roles.join(', ')}`);
-    console.log(`📍 Locations: ${locations.join(', ')}`);
+                    // JSearch API for specific location
+                    const jsearchJobs = await this.fetchJSearchJobs(role, location, 8);
+                    allJobs.push(...jsearchJobs);
+                    await this.sleep(1500);
 
-    for (const role of roles) {
-        console.log(`\n🔍 Searching for: ${role}`);
+                    // Adzuna API for specific location
+                    const adzunaJobs = await this.fetchAdzunaJobs(role, location, 5);
+                    allJobs.push(...adzunaJobs);
+                    await this.sleep(1000);
+                }
 
-        try {
-            // RemoteOK (Most reliable)
-            const remoteOKJobs = await this.fetchRemoteOKJobs(role, 15);
-            const filteredRemoteOK = remoteOKJobs.filter(job =>
-            isLocationMatch(job.location, job.isRemote)
-            );
-            allJobs.push(...filteredRemoteOK);
+                // RemoteOK for remote jobs (only if user wants remote)
+                if (allowRemote) {
+                    const remoteOKJobs = await this.fetchRemoteOKJobs(role, 10);
+                    allJobs.push(...remoteOKJobs);
+                    await this.sleep(1000);
+                }
 
-            await this.sleep(1000);
-
-            // LinkedIn API
-            for (const location of locations.slice(0, 2)) {
-            const linkedinJobs = await this.fetchLinkedInJobs(role, location, 8);
-            const filteredLinkedIn = linkedinJobs.filter(job =>
-                isLocationMatch(job.location, job.isRemote)
-            );
-            allJobs.push(...filteredLinkedIn);
-            await this.sleep(2000);
+            } catch (error) {
+                console.error(`❌ Error searching for ${role}:`, error.message);
             }
-
-
-            // JSearch API
-            const jsearchJobs = await this.fetchJSearchJobs(role, 'Remote', 10);
-            const filteredJSearch = jsearchJobs.filter(job =>
-            isLocationMatch(job.location, job.isRemote)
-            );
-            allJobs.push(...filteredJSearch);
-
-            await this.sleep(2000);
-
-            // Adzuna API
-            const adzunaJobs = await this.fetchAdzunaJobs(role, 'remote', 5);
-            const filteredAdzuna = adzunaJobs.filter(job =>
-            isLocationMatch(job.location, job.isRemote)
-            );
-            allJobs.push(...filteredAdzuna);
-
-            await this.sleep(1000);
-
-        } catch (error) {
-            console.error(`❌ Error searching for ${role}:`, error.message);
         }
+
+        // Remove exact duplicates based on title and company
+        const uniqueJobs = allJobs.filter((job, index, self) =>
+            index === self.findIndex(j =>
+                j.title.toLowerCase().trim() === job.title.toLowerCase().trim() &&
+                j.company.toLowerCase().trim() === job.company.toLowerCase().trim()
+            )
+        );
+
+        // Filter by location preferences
+        const locationFilteredJobs = uniqueJobs.filter(job => 
+            this.isLocationMatch(job.location, locations, allowRemote)
+        );
+
+        // Calculate match scores
+        const scoredJobs = locationFilteredJobs.map(job => ({
+            ...job,
+            matchScore: this.calculateMatchScore(job)
+        }));
+
+        // Sort by match score and recency
+        scoredJobs.sort((a, b) => {
+            if (b.matchScore !== a.matchScore) {
+                return b.matchScore - a.matchScore;
+            }
+            return new Date(b.postedDate) - new Date(a.postedDate);
+        });
+
+        // Apply offset for pagination
+        const paginatedJobs = scoredJobs.slice(offset);
+
+        this.jobResults = paginatedJobs;
+
+        console.log(`\n✅ Job search completed! Found ${this.jobResults.length} jobs after filtering`);
+        console.log(`🔍 Total raw results: ${allJobs.length}`);
+        console.log(`🎯 After deduplication: ${uniqueJobs.length}`);
+        console.log(`📍 After location filtering: ${locationFilteredJobs.length}`);
+
+        // Show source breakdown
+        const sourceBreakdown = this.jobResults.reduce((acc, job) => {
+            acc[job.source] = (acc[job.source] || 0) + 1;
+            return acc;
+        }, {});
+        console.log('📊 Jobs by source:', sourceBreakdown);
+
+        return this.jobResults;
     }
-
-    // Remove duplicates
-    const uniqueJobs = allJobs.filter((job, index, self) =>
-        index === self.findIndex(j =>
-            j.title.toLowerCase().replace(/[^a-z0-9]/g, '') === job.title.toLowerCase().replace(/[^a-z0-9]/g, '') &&
-            j.company.toLowerCase().replace(/[^a-z0-9]/g, '') === job.company.toLowerCase().replace(/[^a-z0-9]/g, '')
-        )
-    );
-
-    // Separate exact location matches and remote jobs
-    const locationMatches = uniqueJobs.filter(job =>
-        isLocationMatch(job.location) && !job.isRemote
-    );
-    const remoteMatches = uniqueJobs.filter(job =>
-        job.isRemote && !isLocationMatch(job.location)
-    );
-
-    // Combine them (location jobs first)
-    const finalSorted = [...locationMatches, ...remoteMatches];
-
-    // Calculate match scores
-    this.jobResults = finalSorted.map(job => ({
-        ...job,
-        matchScore: this.calculateMatchScore(job)
-    }));
-
-    // Sort by match score
-    this.jobResults.sort((a, b) => b.matchScore - a.matchScore);
-
-
-    console.log(`\n✅ Job search completed! Found ${this.jobResults.length} unique jobs`);
-
-    // Show source breakdown
-    const sourceBreakdown = this.jobResults.reduce((acc, job) => {
-        acc[job.source] = (acc[job.source] || 0) + 1;
-        return acc;
-    }, {});
-    console.log('📊 Jobs by source:', sourceBreakdown);
-
-    return this.jobResults;
-}
-
 
     generateDetailedReport() {
         const highMatch = this.jobResults.filter(job => job.matchScore >= 60);

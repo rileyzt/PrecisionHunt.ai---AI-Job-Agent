@@ -7,7 +7,7 @@ const runScraper = async () => {
   const skills = ['HTML, CSS, JavaScript, Java, Node, React'];
   const preferences = {
     roles: ['Software Developer'],
-    locations: ['Remote'],
+    locations: ['Remote','India','Bangalore','Mumbai','Delhi','Hyderabad','Chennai','Pune','Kolkata','Dubai','Singapore'],
     experience: '3 years',
     minSalary: 50000,
     jobType: 'full-time'
