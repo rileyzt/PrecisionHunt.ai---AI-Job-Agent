@@ -278,12 +278,9 @@ export default function JobForm() {
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-purple-200 to-purple-400">
-              PrecisionHunt
+              PrecisionHunt.ai
             </span>
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-              AI
-            </span>
+          
           </h1>
           
           <p className="text-xl md:text-2xl text-gray-300 mb-8 leading-relaxed">
