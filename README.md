@@ -75,8 +75,6 @@ Or open an Issue with suggestions and ideas!
 📄 License
 MIT
 
-🤝 Built with ❤️ by @rileyzt
-
 *DM for collab 
 
 
